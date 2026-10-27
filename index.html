@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>World Briefing</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,600;1,9..144,500&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  :root{
+    --bg:#F5F3EE;
+    --surface:#FFFFFF;
+    --fg:#211E18;
+    --fg-muted:#716A5A;
+    --accent:#8A3324;
+    --border:#DFDACC;
+    --shadow:0 1px 2px rgba(30,25,15,.05), 0 10px 24px rgba(30,25,15,.05);
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --bg:#17150F;
+      --surface:#211D15;
+      --fg:#EFEAE0;
+      --fg-muted:#A79E8C;
+      --accent:#E98B6F;
+      --border:#352E22;
+      --shadow:0 1px 2px rgba(0,0,0,.4), 0 10px 24px rgba(0,0,0,.4);
+    }
+  }
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; padding:0; }
+  body{
+    background:var(--bg);
+    color:var(--fg);
+    font-family:'IBM Plex Sans', system-ui, sans-serif;
+    line-height:1.5;
+    padding:40px 20px 64px;
+  }
+  .wrap{ max-width:900px; margin:0 auto; }
+
+  .masthead{ text-align:center; border-bottom:2px solid var(--fg); padding-bottom:18px; margin-bottom:8px; }
+  .masthead-date{
+    font-family:'IBM Plex Mono', monospace; font-size:.75rem; letter-spacing:.08em;
+    text-transform:uppercase; color:var(--fg-muted); margin:0 0 8px;
+  }
+  .masthead h1{
+    font-family:'Fraunces', Georgia, serif; font-weight:600; font-size:clamp(2.1rem,7vw,3rem);
+    margin:0; letter-spacing:.01em;
+  }
+  .masthead-sub{ margin:8px 0 0; color:var(--fg-muted); font-size:.88rem; font-style:italic; font-family:'Fraunces', Georgia, serif; }
+
+  .toolbar{ display:flex; justify-content:center; align-items:center; gap:14px; margin:18px 0 36px; flex-wrap:wrap; }
+  .refresh-btn{
+    font-family:'IBM Plex Sans', sans-serif; font-size:.82rem; font-weight:500;
+    background:var(--surface); color:var(--fg); border:1px solid var(--border);
+    border-radius:999px; padding:8px 18px; cursor:pointer;
+  }
+  .refresh-btn:hover{ border-color:var(--accent); color:var(--accent); }
+  .refresh-btn:disabled{ opacity:.5; cursor:default; }
+  .updated-at{ font-size:.78rem; color:var(--fg-muted); font-family:'IBM Plex Mono', monospace; }
+
+  .sections{ display:grid; grid-template-columns:1fr 1fr; gap:28px; }
+  @media (max-width:640px){ .sections{ grid-template-columns:1fr; } }
+
+  .section{
+    background:var(--surface); border:1px solid var(--border); border-radius:14px;
+    padding:22px 22px 10px; box-shadow:var(--shadow);
+  }
+  .section-head{
+    display:flex; align-items:baseline; justify-content:space-between;
+    border-bottom:1px solid var(--border); padding-bottom:10px; margin-bottom:6px;
+  }
+  .section-head h2{
+    font-family:'Fraunces', Georgia, serif; font-weight:600; font-size:1.05rem; margin:0;
+  }
+  .section-status{ font-size:.72rem; color:var(--fg-muted); font-family:'IBM Plex Mono', monospace; }
+
+  ul.headlines{ list-style:none; margin:0; padding:0; }
+  .headline{ padding:12px 0; border-bottom:1px solid var(--border); }
+  .headline:last-child{ border-bottom:none; }
+  .headline a{
+    color:var(--fg); text-decoration:none; font-size:.93rem; font-weight:500; line-height:1.4;
+    display:block; margin-bottom:4px;
+  }
+  .headline a:hover{ color:var(--accent); text-decoration:underline; }
+  .headline-meta{ font-size:.74rem; color:var(--fg-muted); font-family:'IBM Plex Mono', monospace; }
+
+  .placeholder{ padding:16px 0; color:var(--fg-muted); font-size:.85rem; }
+  .placeholder.error{ color:var(--accent); }
+
+  footer{
+    max-width:900px; margin:44px auto 0; text-align:center;
+    color:var(--fg-muted); font-size:.78rem; line-height:1.6;
+  }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="masthead">
+      <p class="masthead-date" id="todayDate"></p>
+      <h1>World Briefing</h1>
+      <p class="masthead-sub">Headlines from around the world, as they stand right now</p>
+    </div>
+
+    <div class="toolbar">
+      <button class="refresh-btn" id="refreshBtn">Refresh headlines</button>
+      <span class="updated-at" id="updatedAt"></span>
+    </div>
+
+    <div class="sections" id="sections"></div>
+  </div>
+
+  <footer>
+    Headlines are fetched live from each outlet's own public feed when this page loads, via a free RSS&nbsp;→&nbsp;JSON relay.
+    Headline text and links belong to the listed sources — click through to read the full story on their site.
+  </footer>
+
+<script>
+(function(){
+  "use strict";
+
+  var SOURCES = [
+    { name: "BBC World", feed: "http://feeds.bbci.co.uk/news/world/rss.xml" },
+    { name: "Al Jazeera", feed: "https://www.aljazeera.com/xml/rss/all.xml" },
+    { name: "The Guardian — World", feed: "https://www.theguardian.com/world/rss" },
+    { name: "NPR — World", feed: "https://feeds.npr.org/1004/rss.xml" }
+  ];
+  var ITEMS_PER_SOURCE = 7;
+  var PROXY = "https://api.rss2json.com/v1/api.json?rss_url=";
+
+  var sectionsEl = document.getElementById('sections');
+  var refreshBtn = document.getElementById('refreshBtn');
+  var updatedAtEl = document.getElementById('updatedAt');
+  var todayDateEl = document.getElementById('todayDate');
+
+  todayDateEl.textContent = new Date().toLocaleDateString(undefined, {
+    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+  });
+
+  function relativeTime(dateStr){
+    var then = new Date(dateStr).getTime();
+    if(isNaN(then)) return '';
+    var diffMin = Math.round((Date.now() - then) / 60000);
+    if(diffMin < 1) return 'just now';
+    if(diffMin < 60) return diffMin + 'm ago';
+    var diffHr = Math.round(diffMin / 60);
+    if(diffHr < 24) return diffHr + 'h ago';
+    var diffDay = Math.round(diffHr / 24);
+    return diffDay + 'd ago';
+  }
+
+  function escapeHtml(str){
+    var div = document.createElement('div');
+    div.textContent = str || '';
+    return div.innerHTML;
+  }
+
+  function buildSectionShell(source, index){
+    var section = document.createElement('div');
+    section.className = 'section';
+    section.innerHTML =
+      '<div class="section-head">' +
+        '<h2>' + escapeHtml(source.name) + '</h2>' +
+        '<span class="section-status" id="status-' + index + '">loading…</span>' +
+      '</div>' +
+      '<div id="body-' + index + '">' +
+        '<p class="placeholder">Fetching latest headlines…</p>' +
+      '</div>';
+    return section;
+  }
+
+  function renderHeadlines(index, items){
+    var bodyEl = document.getElementById('body-' + index);
+    var statusEl = document.getElementById('status-' + index);
+    if(!items || items.length === 0){
+      bodyEl.innerHTML = '<p class="placeholder">No headlines returned right now.</p>';
+      statusEl.textContent = 'empty';
+      return;
+    }
+    var list = document.createElement('ul');
+    list.className = 'headlines';
+    items.slice(0, ITEMS_PER_SOURCE).forEach(function(item){
+      var li = document.createElement('li');
+      li.className = 'headline';
+      var a = document.createElement('a');
+      a.href = item.link || '#';
+      a.target = '_blank';
+      a.rel = 'noopener noreferrer';
+      a.textContent = item.title || '(untitled)';
+      var meta = document.createElement('div');
+      meta.className = 'headline-meta';
+      meta.textContent = relativeTime(item.pubDate);
+      li.appendChild(a);
+      li.appendChild(meta);
+      list.appendChild(li);
+    });
+    bodyEl.innerHTML = '';
+    bodyEl.appendChild(list);
+    statusEl.textContent = 'live';
+  }
+
+  function renderError(index, message){
+    var bodyEl = document.getElementById('body-' + index);
+    var statusEl = document.getElementById('status-' + index);
+    bodyEl.innerHTML = '<p class="placeholder error">Couldn\'t load this feed right now' + (message ? ' (' + escapeHtml(message) + ')' : '') + '. Try refreshing in a moment.</p>';
+    statusEl.textContent = 'error';
+  }
+
+  function fetchSource(source, index){
+    var url = PROXY + encodeURIComponent(source.feed);
+    return fetch(url)
+      .then(function(res){
+        if(!res.ok) throw new Error('HTTP ' + res.status);
+        return res.json();
+      })
+      .then(function(data){
+        if(data.status !== 'ok') throw new Error(data.message || 'feed error');
+        renderHeadlines(index, data.items);
+      })
+      .catch(function(err){
+        renderError(index, err.message);
+      });
+  }
+
+  function loadAll(){
+    refreshBtn.disabled = true;
+    refreshBtn.textContent = 'Refreshing…';
+    sectionsEl.innerHTML = '';
+    SOURCES.forEach(function(source, index){
+      sectionsEl.appendChild(buildSectionShell(source, index));
+    });
+    var fetches = SOURCES.map(function(source, index){ return fetchSource(source, index); });
+    Promise.all(fetches).then(function(){
+      refreshBtn.disabled = false;
+      refreshBtn.textContent = 'Refresh headlines';
+      updatedAtEl.textContent = 'Updated ' + new Date().toLocaleTimeString();
+    });
+  }
+
+  refreshBtn.addEventListener('click', loadAll);
+  loadAll();
+})();
+</script>
+</body>
+</html>
